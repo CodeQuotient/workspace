@@ -178,7 +178,7 @@ const getUsersData = async (userIds = []) => {
 
     pipelineOutput.map((arr, index) => {
         let userObj = arr[1] || {};
-        let userId = userObj.id;
+        let userId = userObj._id;
         if ( userId ) {
             userObj.fromRedis = true;
             usersData[userId] = userObj;
@@ -199,6 +199,7 @@ const getUsersData = async (userIds = []) => {
                 userModel.columnName.profilePic,
                 userModel.columnName.email,
                 userModel.columnName.status,
+                userModel.columnName.lastseen_at,
             ], condition
         );
         usersObjArr.map(userObj => {
@@ -210,6 +211,7 @@ const getUsersData = async (userIds = []) => {
                 [constants.redisKeys.email]: userObj.email,
                 [constants.redisKeys.profilePic]: userObj.profile_pic,
                 [constants.redisKeys.status]: userObj.status,
+                [constants.redisKeys.lastseen_at]: userObj.lastseen_at
             }
             usersData[userId] = obj;
             redisService.redis('hmset', `${constants.redisKeys.userData}:${userId}`, obj);
@@ -227,7 +229,7 @@ const getChannelUsersData = async (payload) => {
         WHERE ${channelModel.columnName.id} = '${channelId}' \
     `;
     let res = await postgres.query(q);
-    console.log("getChannelUsersData data = ", res && res.rows);
+    // console.log("getChannelUsersData data = ", res && res.rows);
     const {id, user_ids = [], removed_user_ids = []} = ( res && res.rows && res.rows[0] ) || {};
     if ( ! id )     throw new Error("Channel not found");
     
@@ -265,7 +267,7 @@ const updateUsersData = async  (criteriaObj, objToSet) => {
     let criteria = ` WHERE `;
     Object.entries(criteriaObj ?? {}).forEach(([key, value]) => {
         try {
-            console.log(key, value);
+            // console.log(key, value);
             criteria += ` ${key} = `
             if (typeof value === 'string') {
                 criteria += ` '${value}' `
@@ -328,7 +330,7 @@ const forgotPassword = async (email) => {
     if (!result?.length) {
         throw new Error(libs.messages.errorMessage.userNotFound);
     }
-    console.log(result);
+    // console.log(result);
     const userData = result?.[0];
     const emailClass = services.emailService.CreateEmailFactory({
         to: email,
@@ -386,6 +388,22 @@ const getUserChannelsAndWorkspace = async (userId) => {
     return res.rows[0];
 }
 
+const updateLastSeenUser = async (userId,lastseen)=>{
+    let updatedObj={};
+    updatedObj[userModel.columnName.lastseen_at]=lastseen;  // update last seen time to current time.
+    // console.log("update obj",updatedObj);
+    return updateUsersData({[userModel.columnName.id]: userId}, updatedObj);
+}
+
+const getWids = async (userId) => {
+    const condition = `WHERE ${userModel.columnName.id} = '${userId}'`;
+    const user = await services.userService.getSingleUserFromDb([userModel.columnName.workspace_ids], condition);
+    if (!user) {
+        throw new Error('User not found');
+    }
+    return user[userModel.columnName.workspace_ids];
+}
+
 module.exports = {
     addUsers,
     isUserExist,
@@ -399,4 +417,6 @@ module.exports = {
     validateUserPassword,
     validateResetPasswordToken,
     getUserChannelsAndWorkspace,
+    updateLastSeenUser,
+    getWids,
 }
