@@ -27,11 +27,15 @@ const authController = require('./controllers/authController');
 const channelController = require('./controllers/channelController');
 const messageController = require('./controllers/messageController');
 const userActivityController = require('./controllers/userActivityController');
+const userController = require('./controllers/userController');
 const notificationController = require('./controllers/notificationController');
+const publisherController = require('./controllers/publisherController');
 const emailService = require('./services/emailService');
 const cookie = require('cookie');
 
 const socketRoutes = require('./routes/socketRoutes');
+const { redisService } = require('./services');
+const { redisKeys,onlineStatusType } = require('./lib/constants');
 
 app.use(express.json({limit: '50mb', extended: true}));
 app.use(express.urlencoded({limit: '50mb', extended: true}));
@@ -61,7 +65,6 @@ io.use( async (socket, next) => {
 		const sessionObj = await authController.authenticateSession(cookies?.jwt);
 		if ( ! sessionObj )		throw new Error("Request is not authenticated");
 		socket.userData = sessionObj;
-		//console.log("Socket user data = ", userData);
 		next();	
 	} catch (e) {
 		console.log(e)
@@ -70,18 +73,30 @@ io.use( async (socket, next) => {
 	}
 })
 
-io.on('connection', (socket) => {
-	//console.log('a user connected');
+io.on('connection', async (socket) => {
+	const time=Date.now();
 	let userId = socket.userData && socket.userData.userId;
 	let socketId = socket.id;
 	socket.join(userId);
-	socket.on('disconnect', () => {
-		//console.log('user disconnected');
+	const obj=JSON.stringify({
+		"userId":userId,
+		"type":onlineStatusType.online,
+		"timeStamp":time
+	});
+	await redisService.redis('rpush',`${redisKeys.emitRequestData}`,obj);
+
+	socket.on('disconnect',async () => {
+		const time=Date.now();
 		socket.leave(userId);
-		channelController.setLastSeenOnSocketDisconnection({userId, socketId})
+		const obj=JSON.stringify({
+			"userId":userId,
+			"type":onlineStatusType.offline,
+			"timeStamp":time
+		});
+		await redisService.redis('rpush',`${redisKeys.emitRequestData}`,obj);
+		channelController.setLastSeenOnSocketDisconnection({userId, socketId});
 	});
 	socketRoutes(socket, io);
-	
 });
 
 app.use(middelwares.session.populateSession);
@@ -128,6 +143,27 @@ process.on('unhandledRejection', (reason, p) => {
 	// application specific logging, throwing an error, or other logic here
 });
 
+async function deleteSocketCnt(){
+	let cursor = '0';
+  
+	do {
+	  const result = await redisService.redis('scan', cursor, 'MATCH', `${redisKeys.userData}:*`, 'COUNT', 100);
+	  cursor = result[0];
+	  const keys = result[1];
+	  if(keys.length > 0){
+		keys.forEach(async key => {
+			await redisService.redis('hdel', `${redisKeys.userData}:${key.split(':')[1]}`,'socketCnt');
+		});
+	  }
+	} while (cursor !== '0');
+}
+deleteSocketCnt();
+
+setInterval( async () => {
+	if (process.env.SOCKET_PUBLISHER == 1) {
+		publisherController.sendEmit();
+	}
+},1000)
 
 setInterval( async () => {
 	try {
