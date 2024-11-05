@@ -1,54 +1,56 @@
-const {channelController, messageController, notificationController, userController} = require("../controllers");
-const {redisService} = require("../services");
-const {constants, utils} = require('../lib');
+const { channelController, messageController, notificationController, userController } = require("../controllers");
+const { redisService } = require("../services");
+const { constants, utils } = require('../lib');
 const controllers = require("../controllers");
-const {redisKeys} = constants;
+const { redisKeys } = constants;
+const userService = require('../services/userService');
 
-module.exports = function(socket, io) {
+
+module.exports = function (socket, io) {
     socket.on('hello', (data) => {
         console.log("Socket hello");
     })
 
     socket.on('joinWorkspace', async (payload, ack) => {
         try {
-            const {workspaceId} = payload;
-            if ( ! workspaceId )      throw new Error("WorkspaceId is null");
-            
+            const { workspaceId } = payload;
+            if (!workspaceId) throw new Error("WorkspaceId is null");
+
             const userId = socket.userData.userId;
 
             socket.join(workspaceId);
             console.log(`UserId ${userId} joined the workspace ${workspaceId}`);
-            userController.setLastActiveData({workspaceId, userId});
-            if (ack)    ack();
+            userController.setLastActiveData({ workspaceId, userId });
+            if (ack) ack();
         } catch (error) {
             console.log("Error in joinWorkspace. Error = ", error);
             socket.emit('error', error);
-            if (ack)    ack({error: error.message});
+            if (ack) ack({ error: error.message });
         }
     })
 
     socket.on('leaveWorkspace', async (payload, ack) => {
         try {
-            const {workspaceId} = payload;
-            if ( ! workspaceId )      throw new Error("WorkspaceId is null");
-            
+            const { workspaceId } = payload;
+            if (!workspaceId) throw new Error("WorkspaceId is null");
+
             const userId = socket.userData.userId;
 
             socket.leave(workspaceId);
             console.log(`UserId ${userId} leaved the workspace ${workspaceId}`);
-            if (ack)    ack();
+            if (ack) ack();
         } catch (error) {
             console.log("Error in joinWorkspace. Error = ", error);
             socket.emit('error', error);
-            if (ack)    ack({error: error.message});
+            if (ack) ack({ error: error.message });
         }
     })
 
     socket.on('joinChannel', async (payload, ack) => {
         try {
             const { workspaceId, channelId } = payload;
-            if ( ! workspaceId )    throw new Error("WorkspaceId is null");
-            if ( ! channelId )      throw new Error("ChannelId is null");
+            if (!workspaceId) throw new Error("WorkspaceId is null");
+            if (!channelId) throw new Error("ChannelId is null");
 
             const userId = socket.userData.userId;
             socket.join(channelId);
@@ -57,52 +59,123 @@ module.exports = function(socket, io) {
                 redisService.redis('expire', `${redisKeys.socketDataHash}:${socket.id}`, constants.rediskeyExpiryTimesInSec.userDataHash);
             });
 
-            channelController.setLastSeenOfChannel({channelId, userId});
-            userController.setLastActiveData({workspaceId, channelId, userId});
+            channelController.setLastSeenOfChannel({ channelId, userId });
+            userController.setLastActiveData({ workspaceId, channelId, userId });
 
-            let userChannelDataObj = await channelController.getUserChannelDataObj({channelId, userId}) || {};
+            let userChannelDataObj = await channelController.getUserChannelDataObj({ channelId, userId }) || {};
 
             console.log(`UserId ${userId} joined the channel ${channelId}`);
-            if (ack)    ack(userChannelDataObj);
+            if (ack) ack(userChannelDataObj);
 
-            io.to(channelId).emit('userJoinedChannel', {userId, channelId});
+            io.to(channelId).emit('userJoinedChannel', { userId, channelId });
 
         } catch (error) {
             console.log("Error in joinChannel. Error = ", error);
             socket.emit('error', error);
-            if (ack)    ack({error: error.message});
+            if (ack) ack({ error: error.message });
         }
     })
 
     socket.on('leaveChannel', async (payload, ack) => {
         try {
             const { channelId } = payload;
-            if ( ! channelId )      throw new Error("ChannelId is null");
-            
+            if (!channelId) throw new Error("ChannelId is null");
+
             const userId = socket.userData.userId;
 
             socket.leave(channelId);
-            channelController.setLastSeenOfChannel({channelId, userId});
+            channelController.setLastSeenOfChannel({ channelId, userId });
 
             redisService.redis('del', `${redisKeys.userChannelDataHash}:${userId}`);
 
             console.log(`UserId ${userId} leaved the channel ${channelId}`);
-            if (ack)    ack();
+            if (ack) ack();
 
-            io.to(channelId).emit('userLeftChannel', {userId, channelId});
+            io.to(channelId).emit('userLeftChannel', { userId, channelId });
 
         } catch (error) {
             console.log("Error in joinChannel. Error = ", error);
             socket.emit('error', error);
-            if (ack)    ack({error: error.message});
+            if (ack) ack({ error: error.message });
         }
     })
+    // socket.on('userTyping', async (payload, ack) => {
+    //     try {
+    //         const { channelId, userId } = payload;
+    //         console.log(`chanelId = ${channelId}, userId = ${userId}`);
+    //         console.log("socket id is ", socket.id);
+    //         await messageController.showUserTyping({ userId, channelId, socketId: socket.id, isTyping: true });
+    //         if (!channelId) throw new Error("ChannelId is null");
+    //         socket.broadcast.to(channelId).emit('userTyping', payload);
+    //         if (ack) ack();
+    //     } catch (error) {
+    //         console.log("Error in userTyping. Error = ", error);
+    //         socket.emit('error', error);
+    //         if (ack) ack({ error: error.message });
+    //     }
+    // })
+
+    // let typingTimeout = null;
+    // socket.on('userTyping', async (payload, ack) => {
+    //     try {
+    //         const { channelId, userId, name } = payload;
+    //         console.log(`chanelId = ${channelId}, userId = ${userId}`);
+    //         console.log("socket id is ", socket.id);
+    //         console.log(`name = ${name}`);
+    //         if (!channelId) throw new Error("ChannelId is null");
+    //         if (typingTimeout) {
+    //             clearTimeout(typingTimeout);
+    //         }
+    //         socket.broadcast.to(channelId).emit('userTyping', { userId, isTyping: true, name });
+    //         typingTimeout = setTimeout(() => {
+    //             socket.broadcast.to(channelId).emit('userTyping', { userId, isTyping: false, name });
+    //         }, 1000);
+
+    //         if (ack) ack('test');
+    //     } catch (error) {
+    //         console.log("Error in userTyping. Error = ", error);
+    //         socket.emit('error', error);
+    //         if (ack) ack({ error: error.message });
+    //     }
+    // })
+
+    const typingTimeouts = new Map();
+
+    socket.on('userTyping', async (payload, ack) => {
+        try {
+            const { channelId, userId, name } = payload;
+            console.log(`channelId = ${channelId}, userId = ${userId}`);
+            console.log("socket id is ", socket.id);
+            console.log(`name = ${name}`);
+            if (!channelId) throw new Error("ChannelId is null");
+            let socketTimeouts = typingTimeouts.get(socket.id);
+            if (!socketTimeouts) {
+                socketTimeouts = new Map();
+                typingTimeouts.set(socket.id, socketTimeouts);
+            }
+            if (socketTimeouts.has(channelId)) {
+                clearTimeout(socketTimeouts.get(channelId));
+            }
+            socketTimeouts.set(channelId, setTimeout(() => {
+                socket.broadcast.to(channelId).emit('userTyping', { userId, isTyping: false, name });
+            }, 1000));
+
+            socket.broadcast.to(channelId).emit('userTyping', { userId, isTyping: true, name });
+
+            if (ack) ack();
+        } catch (error) {
+            console.log("Error in userTyping. Error = ", error);
+            socket.emit('error', error);
+            if (ack) ack({ error: error.message });
+        }
+    });
 
     socket.on('message', async (payload, ack) => {
         try {
-            const {eventType, workspaceId, channelId} = payload;
-            if ( ! channelId )      throw new Error("ChannelId is null");
-            
+            console.log("message generated");
+            const { eventType, workspaceId, channelId } = payload;
+            if (!channelId) throw new Error("ChannelId is null");
+
             payload.userId = socket.userData.userId;
             let data;
             switch (eventType) {
@@ -118,21 +191,21 @@ module.exports = function(socket, io) {
                 default:
                     throw new Error("Event Type is not valid");
             }
-            let obj = {payload, ...data}
+            let obj = { payload, ...data }
             io.to(channelId).emit('message', obj);
-            if (ack)    ack(obj);
+            if (ack) ack(obj);
         } catch (error) {
             console.log("Error in joinChannel. Error = ", error);
             socket.emit('error', error);
-            if (ack)    ack({error: error.message});
+            if (ack) ack({ error: error.message });
         }
     })
 
     socket.on('reply', async (payload, ack) => {
         try {
-            const {eventType, channelId} = payload;
-            if ( ! channelId )      throw new Error("ChannelId is null");
-            
+            const { eventType, channelId } = payload;
+            if (!channelId) throw new Error("ChannelId is null");
+
             payload.userId = socket.userData.userId;
             let data;
             switch (eventType) {
@@ -148,13 +221,13 @@ module.exports = function(socket, io) {
                 default:
                     throw new Error("Event Type is not valid");
             }
-            let obj = {payload, ...data}
+            let obj = { payload, ...data }
             io.to(channelId).emit('reply', obj);
-            if (ack)    ack(obj);
+            if (ack) ack(obj);
         } catch (error) {
             console.log("Error in reply. Error = ", error);
             socket.emit('error', error);
-            if (ack)    ack({error: error.message});
+            if (ack) ack({ error: error.message });
         }
     })
 
@@ -162,12 +235,12 @@ module.exports = function(socket, io) {
         try {
             payload.userId = socket.userData.userId;
             let count = await notificationController.countUnreadNotifications(payload);
-            socket.emit('notificationsCount', {count});
-            if (ack)    ack({count});
+            socket.emit('notificationsCount', { count });
+            if (ack) ack({ count });
         } catch (error) {
             console.log("Error in notificationsCount. Error = ", error);
             socket.emit('error', error);
-            if (ack)    ack({error: error.message});
+            if (ack) ack({ error: error.message });
         }
     })
 
@@ -176,22 +249,22 @@ module.exports = function(socket, io) {
             payload.userId = socket.userData.userId;
             let data = await notificationController.listNotifications(payload);
             socket.emit('notificationsList', data);
-            if (ack)    ack(data);
+            if (ack) ack(data);
         } catch (error) {
             console.log("Error in notificationsList. Error = ", error);
             socket.emit('error', error);
-            if (ack)    ack({error: error.message});
+            if (ack) ack({ error: error.message });
         }
     })
 
     socket.on('notificationRead', async (payload, ack) => {
         try {
             let data = await notificationController.changeStatusToRead(payload);
-            if (ack)    ack(data);
+            if (ack) ack(data);
         } catch (error) {
             console.log("Error in notificationRead. Error = ", error);
             socket.emit('error', error);
-            if (ack)    ack({error: error.message});
+            if (ack) ack({ error: error.message });
         }
     })
 
@@ -199,11 +272,11 @@ module.exports = function(socket, io) {
         try {
             payload.userId = socket.userData.userId;
             let data = await notificationController.setNotificationLastSeen(payload);
-            if (ack)    ack(data);
+            if (ack) ack(data);
         } catch (error) {
             console.log("Error in setNotificationLastRead. Error = ", error);
             socket.emit('error', error);
-            if (ack)    ack({error: error.message});
+            if (ack) ack({ error: error.message });
         }
     })
 
@@ -212,11 +285,11 @@ module.exports = function(socket, io) {
             payload.userId = socket.userData.userId;
 
             let data = await messageController.setIsResolvedOfMessage(payload);
-            if (ack)    ack(data);
+            if (ack) ack(data);
         } catch (error) {
             console.log("Error in setIsResolvedOfMessage. Error = ", error);
             socket.emit('error', error);
-            if (ack)    ack({error: error.message});
+            if (ack) ack({ error: error.message });
         }
     })
 
@@ -224,11 +297,11 @@ module.exports = function(socket, io) {
         try {
             payload.userId = socket.userData.userId;
             let data = await messageController.setIsDiscussionRequiredOfMessage(payload);
-            if (ack)    ack(data);
+            if (ack) ack(data);
         } catch (error) {
             console.log("Error in setIsDiscussionRequiredOfMessage. Error = ", error);
             socket.emit('error', error);
-            if (ack)    ack({error: error.message});
+            if (ack) ack({ error: error.message });
         }
     })
 
@@ -236,11 +309,11 @@ module.exports = function(socket, io) {
         try {
             payload.userId = socket.userData.userId;
             let data = await messageController.updateNotifyUsersListOfMessage(payload);
-            if (ack)    ack(data);
+            if (ack) ack(data);
         } catch (error) {
             console.log("Error in updateNotifyUsersListOfMessage. Error = ", error);
             socket.emit('error', error);
-            if (ack)    ack({error: error.message});
+            if (ack) ack({ error: error.message });
         }
     })
 
@@ -248,11 +321,11 @@ module.exports = function(socket, io) {
         try {
             payload.userId = socket.userData.userId;
             let data = await messageController.updateLikedBy(payload);
-            if (ack)    ack(data);
+            if (ack) ack(data);
         } catch (error) {
             console.log("Error in updateLikedBy. Error = ", error);
             socket.emit('error', error);
-            if (ack)    ack({error: error.message});
+            if (ack) ack({ error: error.message });
         }
     })
 
@@ -260,25 +333,25 @@ module.exports = function(socket, io) {
         try {
             payload.userId = socket.userData.userId;
             let data = await messageController.updateUnlikedBy(payload);
-            if (ack)    ack(data);
+            if (ack) ack(data);
         } catch (error) {
             console.log("Error in updateUnlikedBy. Error = ", error);
             socket.emit('error', error);
-            if (ack)    ack({error: error.message});
+            if (ack) ack({ error: error.message });
         }
     })
 
     socket.on('getOnlineUsersListInChannel', async (payload = {}, ack) => {
         try {
             const channelId = payload.channelId;
-            if ( ! channelId )  throw new Error("ChannelId is null");
+            if (!channelId) throw new Error("ChannelId is null");
 
             let userIdsSet = await utils.getOnlineUserIdsSetInChannelRoom(channelId);
-            if (ack)    ack({userIds: [...userIdsSet]});
+            if (ack) ack({ userIds: [...userIdsSet] });
         } catch (error) {
             console.log("Error in getOnlineUsersListInChannel. Error = ", error);
             socket.emit('error', error);
-            if (ack)    ack({error: error.message});
+            if (ack) ack({ error: error.message });
         }
     })
 
@@ -286,11 +359,11 @@ module.exports = function(socket, io) {
         try {
             payload.userId = socket.userData.userId;
             let obj = await channelController.setPinMessage(payload) || {};
-            if (ack)    ack(obj);
+            if (ack) ack(obj);
         } catch (error) {
             console.log("Error in setPinMessage. Error = ", error);
             socket.emit('error', error);
-            if (ack)    ack({error: error.message});
+            if (ack) ack({ error: error.message });
         }
     })
 
@@ -298,11 +371,11 @@ module.exports = function(socket, io) {
         try {
             payload.userId = socket.userData.userId;
             let obj = await channelController.removePinMessage(payload) || {};
-            if (ack)    ack(obj);
+            if (ack) ack(obj);
         } catch (error) {
             console.log("Error in removePinMessage. Error = ", error);
             socket.emit('error', error);
-            if (ack)    ack({error: error.message});
+            if (ack) ack({ error: error.message });
         }
     })
 
@@ -311,11 +384,11 @@ module.exports = function(socket, io) {
             payload.userId = socket.userData.userId;
             const totalUnreadMessagesCount = 0; //await channelController.getTotalUnreadMessagesCount(payload) || 0;
             //console.log('unread-obj',totalUnreadMessagesCount)
-            if (ack)    ack({totalUnreadMessagesCount});
+            if (ack) ack({ totalUnreadMessagesCount });
         } catch (error) {
             console.log("Error in getTotalUnreadMessagesCount. Error = ", error);
             socket.emit('error', error);
-            if (ack)    ack({error: error.message});
+            if (ack) ack({ error: error.message });
         }
     })
 }

@@ -1,8 +1,8 @@
-const {pool} = require('../config/postgres');
+const { pool } = require('../config/postgres');
 const axios = require('axios');
 
 
-const {loginUrl} = require('../config/configVars');
+const { loginUrl } = require('../config/configVars');
 const user = require('../models/user');
 
 var getUserFormDb = async function (columnsToGet, rawCondition) {
@@ -59,7 +59,7 @@ var createUserDB = async function (userData) {
             query += ` ${element} `;
             if (index < (keys.length - 1)) {
                 query += ',';
-            }  
+            }
         })
         query += ') values (';
         const values = Object.values(userData);
@@ -71,10 +71,10 @@ var createUserDB = async function (userData) {
             }
             if (index < (values.length - 1)) {
                 query += ',';
-            }  
+            }
         })
         query += `) RETURNING *;`;
-        const result =  await pool.query(query);
+        const result = await pool.query(query);
         return result;
     } catch (error) {
         console.log(error);
@@ -107,32 +107,32 @@ const updateUserDB = async function (dataToSet, rawCondition) {
     });
     query += rawCondition ?? '';
     query += ' RETURNING *;'
-    console.log(query);
+    // console.log(query);
     const result = await pool.query(query);
     return result?.rows;
 }
 
-const userQuery = async function( method, criteria = {}, projection = {}, options = {}, callback ) {
+const userQuery = async function (method, criteria = {}, projection = {}, options = {}, callback) {
     try {
-        if ( ! ( method ) )     throw new Error("Error userQuery Method name is null");
+        if (!(method)) throw new Error("Error userQuery Method name is null");
         let obj = {
             criteria,
             projection,
             options,
             method
         }
-        if( options.userEvent ){
+        if (options.userEvent) {
             delete options.userEvent;
             obj.userEvent = true
         }
         let url = `${loginUrl}/user/dbquery`;
         const response = await axios.post(url, obj)
-        if ( callback )     return callback(null, response.data && response.data.data);
+        if (callback) return callback(null, response.data && response.data.data);
         return response.data && response.data.data;
     }
-    catch(err) {
+    catch (err) {
         console.log("User Query Error = ", err);
-        if ( callback )     return callback(err);
+        if (callback) return callback(err);
         throw err;
     }
 }
@@ -142,15 +142,15 @@ var getUser = async function (criteria, projection, options = {}, callback) {
     try {
         options.lean = true;
         let user = await userQuery('getUser', criteria, projection, options);
-        if ( callback )     return callback(null, user);
+        if (callback) return callback(null, user);
         return user;
     }
     catch (err) {
-	    console.log("getUser ERror = ", err);
-        if ( callback )     return callback(err);
+        console.log("getUser ERror = ", err);
+        if (callback) return callback(err);
         throw err;
     }
-    
+
 };
 
 //Get One User from DB
@@ -158,12 +158,12 @@ var getOneUser = async function (criteria, projection, options = {}, callback) {
     try {
         options.lean = true;
         let user = await userQuery('getOneUser', criteria, projection, options);
-        if ( callback )     return callback(null, user);
+        if (callback) return callback(null, user);
         return user;
     }
     catch (err) {
-	    console.log("getOneUser ERror = ", err);    
-        if ( callback )     return callback(err);
+        console.log("getOneUser ERror = ", err);
+        if (callback) return callback(err);
         throw err;
     }
 };
@@ -173,12 +173,12 @@ var getOneUser = async function (criteria, projection, options = {}, callback) {
 var createUser = async function (objToSave, callback) {
     try {
         let user = await userQuery('createUser', objToSave);
-        if ( callback )     return callback(null, user);
+        if (callback) return callback(null, user);
         return user;
     }
     catch (err) {
-	console.log("createUser ERror = ", err);
-        if ( callback )     return callback(err);
+        console.log("createUser ERror = ", err);
+        if (callback) return callback(err);
         throw err;
     }
 };
@@ -191,12 +191,12 @@ var updateUser = async function (criteria, dataToSet, options = {}, callback) {
         options.lean = true;
         options.new = true;
         let user = await userQuery('updateUser', criteria, dataToSet, options);
-        if ( callback )     return callback(null, user);
+        if (callback) return callback(null, user);
         return user;
     }
     catch (err) {
-	    console.log("updateUser ERror = ", err);    
-        if ( callback )     return callback(err);
+        console.log("updateUser ERror = ", err);
+        if (callback) return callback(err);
         throw err;
     }
 };
@@ -205,12 +205,12 @@ var updateUser = async function (criteria, dataToSet, options = {}, callback) {
 var deleteUser = async function (criteria, callback) {
     try {
         let user = await userQuery('deleteUser', criteria);
-        if ( callback )     return callback(null, user);
+        if (callback) return callback(null, user);
         return user;
     }
     catch (err) {
-	    console.log("deleteUser ERror = ", err);
-        if ( callback )     return callback(err);
+        console.log("deleteUser ERror = ", err);
+        if (callback) return callback(err);
         throw err;;
     }
 };
@@ -218,17 +218,17 @@ var deleteUser = async function (criteria, callback) {
 var getUsersCount = async function (criteria, callback) {
     try {
         let user = await userQuery('getUsersCount', criteria);
-        if ( callback )     return callback(null, user);
+        if (callback) return callback(null, user);
         return user;
     }
     catch (err) {
-	    console.log("getUsersCount ERror = ", err);
-        if ( callback )     return callback(err);
+        console.log("getUsersCount ERror = ", err);
+        if (callback) return callback(err);
         throw err;
     }
 };
 
-var bulkUpdate = async function(criteriaArr = [], updateArr = [], castObj = {}, options = {}, callback) {
+var bulkUpdate = async function (criteriaArr = [], updateArr = [], castObj = {}, options = {}, callback) {
     try {
         let obj = {
             criteriaArr,
@@ -239,32 +239,32 @@ var bulkUpdate = async function(criteriaArr = [], updateArr = [], castObj = {}, 
         let url = `${loginUrl}/user/bulkupdate`;
         const response = await axios.post(url, obj);
         console.log("Res = ", response.data)
-        if ( callback )     return callback(null, response.data && response.data.data);
+        if (callback) return callback(null, response.data && response.data.data);
         return response.data && response.data.data;
     }
     catch (err) {
-	      console.log("bulkUPdate ERror = ", err);
-        if ( callback )     return callback(err);
+        console.log("bulkUPdate ERror = ", err);
+        if (callback) return callback(err);
         throw err;
     }
 }
 
-var bulkInsert = async function( insertArr = [], castObj = {}, options = {}, callback) {
+var bulkInsert = async function (insertArr = [], castObj = {}, options = {}, callback) {
     try {
         let obj = {
             insertArr,
             castObj
         }
-        if( options.userEvent ) obj.userEvent = true;
+        if (options.userEvent) obj.userEvent = true;
         let url = `${loginUrl}/user/bulkinsert`;
         const response = await axios.post(url, obj);
         console.log("Res = ", response.data)
-        if ( callback )     return callback(null, response.data && response.data.data);
+        if (callback) return callback(null, response.data && response.data.data);
         return response.data && response.data.data;
     }
     catch (err) {
-	      console.log("bulkUPdate ERror = ", err);
-        if ( callback )     return callback(err);
+        console.log("bulkUPdate ERror = ", err);
+        if (callback) return callback(err);
         throw err;
     }
 }
@@ -274,12 +274,12 @@ var updateUsers = async function (criteria, dataToSet, options = {}, callback) {
         options.lean = true;
         options.new = true;
         let users = await userQuery('updateUsers', criteria, dataToSet, options);
-        if ( callback )     return callback(null, users);
+        if (callback) return callback(null, users);
         return users;
     }
     catch (err) {
-	    console.log("updateUsers ERror = ", err);
-        if ( callback )     return callback(err);
+        console.log("updateUsers ERror = ", err);
+        if (callback) return callback(err);
         throw err;
     }
 };
