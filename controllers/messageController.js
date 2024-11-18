@@ -151,6 +151,20 @@ const addMessageInRedisStream = async (payload) => {
         throw error;
     }
 }
+// const showUserTyping = async (payload) => {
+//     try {
+//         let {  channelId, userId, socketId, isTyping } = payload;
+//         if ( ! channelId )    throw new Error("Channel Id is null");
+//         if ( ! userId )       throw new Error("User Id is null");
+//         if ( ! socketId )     throw new Error("Socket Id is null");
+//         console.log('isTyping', isTyping)
+//         // Emit socket event to all users in the channel
+//         io.to(channelId).emit('userTyping', { userId, isTyping });
+//     } catch (error) {
+//         console.log("Error in showUserTyping. Error = ", error);
+//         throw error;
+//     }
+// }
 
 const addMessageInDb = async (payload) => {
     try {
@@ -1472,6 +1486,7 @@ const startMessageWriteInterval = function() {
 
 module.exports = {
     addMessageInRedisStream,
+    // showUserTyping,
     addMessageInDb,
     editMessage,
     deleteMessage,
