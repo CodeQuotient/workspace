@@ -5,6 +5,7 @@ const libs = require('../lib');
 const userController = require('../controllers/userController');
 const userActivityController = require('../controllers/userActivityController');
 const controllers = require('../controllers');
+const { emit } = require('nodemon');
 
 /*
   Input Body - 
@@ -13,14 +14,14 @@ const controllers = require('../controllers');
       channelId: UUID(String),     OPTIONAL
 */
 router.post('/addUsers', async (req, res) => {
-    try {
-        req.body.createdBy = req.session.userId;
-        let obj = await userController.addUsers(req.body);
-        res.json(obj || {});        
-    } catch (error) {
-      console.log("Error in addUser. Error = ", error);
-      res.json({'error': error.message});  
-    }
+  try {
+    req.body.createdBy = req.session.userId;
+    let obj = await userController.addUsers(req.body);
+    res.json(obj || {});
+  } catch (error) {
+    console.log("Error in addUser. Error = ", error);
+    res.json({ 'error': error.message });
+  }
 });
 
 /*
@@ -51,12 +52,12 @@ router.post('/addUsers', async (req, res) => {
 */
 router.post('/userActivityList', async (req, res) => {
   try {
-      req.body.userId = req.session.userId;
-      let obj = await userActivityController.listUserActivities(req.body);
-      res.json(obj || {});
+    req.body.userId = req.session.userId;
+    let obj = await userActivityController.listUserActivities(req.body);
+    res.json(obj || {});
   } catch (error) {
     console.log("Error in userActivityList. Error = ", error);
-    res.json({'error': error.message});
+    res.json({ 'error': error.message });
   }
 });
 
@@ -69,39 +70,40 @@ router.post('/getUsersList', async (req, res) => {
   try {
     req.body.userId = req.session.userId;
     let usersData = await userController.getChannelUsersData(req.body);
-    res.json({usersData});
+    res.json({ usersData });
   } catch (error) {
-    console.log("Error in getUsersList = ",error);
-    res.json({'error':error.message});
+    console.log("Error in getUsersList = ", error);
+    res.json({ 'error': error.message });
   }
 })
 
 router.post('/getUsersData', async (req, res) => {
   try {
-    const {prefix} = req.body;
-    const userData = await userController.isUserExist({email: prefix});
+    const { prefix } = req.body;
+    const userData = await userController.isUserExist({ email: prefix });
     if (!userData) throw new Error(libs.messages.errorMessage.userNotFound);
-    return res.json({usersData: [{_id: userData.id, email: userData.email}]});
+    return res.json({ usersData: [{ _id: userData.id, email: userData.email }] });
   } catch (error) {
     console.log("Error in getttinguserData", error);
-    return res.status(500).json({error: error?.message ?? error})
+    return res.status(500).json({ error: error?.message ?? error })
   }
 })
 
 router.post('/updateProfile', async (req, res) => {
   try {
     const objToUpdate = {};
+    console.log("req.body", req.body);
     if (req.body.profilePic) {
-      if (!validator.isURL(req.body.profilePic, { 
+      if (!validator.isURL(req.body.profilePic, {
         allow_trailing_dot: true,
         allow_fragments: true,
         allow_localhost: true,
-        
+
       })) {
         if (process.env.NODE_ENV !== "local" && req.body.profilePic.startsWith('http://localhost')) {
-          throw new Error(`Profile Picture `+ libs.messages.errorMessage.urlNotValid);
+          throw new Error(`Profile Picture ` + libs.messages.errorMessage.urlNotValid);
         }
-      }  
+      }
       objToUpdate.profilePic = req.body.profilePic;
     } else {
       objToUpdate.profilePic = null;
@@ -111,8 +113,11 @@ router.post('/updateProfile', async (req, res) => {
       objToUpdate.username = req.body.username;
     }
     if (req.body.status) {
-      if (req.body.status.length>100) throw new Error(libs.messages.errorMessage.statusNotValid);
+      if (req.body.status.length > 100) throw new Error(libs.messages.errorMessage.statusNotValid);
       objToUpdate.status = req.body.status;
+
+      if (req.body.status === "Offline") objToUpdate.show_online = false;
+      if (req.body.status === "Online") objToUpdate.show_online = true;
     }
     if (req.body.password) {
       if (!libs.regex.password.test(req.body.password)) throw new Error(libs.messages.errorMessage.passwordIsNotValid)
@@ -123,24 +128,26 @@ router.post('/updateProfile', async (req, res) => {
       if (!isOldPasswordCorrect) {
         throw new Error(libs.messages.errorMessage.confirmPasswordIsNotValid);
       }
-      objToUpdate.password =  await libs.utils.encryptString(req.body.password);
+      objToUpdate.password = await libs.utils.encryptString(req.body.password);
     }
     await userController.updateUserProfile(req.session.userId, objToUpdate);
     if (objToUpdate.username) {
       req.session.displayname = objToUpdate.username;
     }
     if (objToUpdate.status) {
+      console.log("objToUpdate.show_online", objToUpdate.show_online);
       req.session.status = objToUpdate.status;
+      req.session.show_online = objToUpdate.show_online;
     }
     req.session.profilePic = objToUpdate.profilePic;
     const userData = await controllers.userController.getUserChannelsAndWorkspace(req.session.userId);
     userData.workspace_ids.forEach((workspaceId) => {
       io.to(workspaceId).emit('channelUserDataChange', workspaceId);
     })
-    return res.json({status: libs.constants.statusToNumber.success});
+    return res.json({ status: libs.constants.statusToNumber.success });
   } catch (error) {
     console.log("Error while updateing user profile", error);
-    return res.json({error: error?.message ?? error});
+    return res.json({ error: error?.message ?? error });
   }
 })
 

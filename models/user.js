@@ -20,5 +20,6 @@ module.exports = {
         'deleted_by': 'deleted_by',
         'last_notification_seen': 'last_notification_seen',
         'status': 'status',
+        'show_online': 'show_online',
     }
 }
