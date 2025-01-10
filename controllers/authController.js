@@ -7,6 +7,7 @@ const { userService } = require("../services")
 const libs = require('../lib');
 const { userModel } = require('../models');
 const config = require('../config/configVars');
+const { emitUserAsOnlineAndOffline } = require('../controllers/userController');
 
 const createSessionObj = (user) => {
     const session = {};
@@ -15,7 +16,8 @@ const createSessionObj = (user) => {
     session.role = user[userModel.columnName.role];
     session.profilePic = user[userModel.columnName.profilePic];
     session.displayname = user[userModel.columnName.displayname];
-    session.status = user[userModel.columnName.status];
+    session.status = 'Online';
+    session.show_online = true;
     return libs.utils.createSessionObj(session);
 }
 
@@ -49,12 +51,13 @@ const login = async (payload, byPassPasswordCheck) => {
     }
 
     const sessionObj = createSessionObj(user);
+    console.log("sessionObj", sessionObj);
     const token = jwt.sign(
         {
             id: user.id,
             email: user.email,
             sid: (sessionObj).sid
-        },libs.constants.jwtSecret
+        }, libs.constants.jwtSecret
     );
 
     let longTermSessionToken = null;
@@ -64,21 +67,27 @@ const login = async (payload, byPassPasswordCheck) => {
                 id: user.id,
                 email: user.email,
             }
-        , libs.constants.jwtSecret, {
+            , libs.constants.jwtSecret, {
             expiresIn: libs.constants.longTermSessionExpireTime_Seconds,
         })
     }
 
     await services.redisService.sessionRedis(
-        'set',`${libs.constants.sessionPrefix}:${sessionObj.sid}`,
+        'set', `${libs.constants.sessionPrefix}:${sessionObj.sid}`,
         JSON.stringify(sessionObj), 'EX', libs.constants.sessionExpireTime_Seconds,
     );
+
+    // if (sessionObj.show_online) {
+        // console.log("sessionObj.show_online", sessionObj.show_online);
+        // emitUserAsOnlineAndOffline(user.id, 'Online');
+    // }
+
     return [token, longTermSessionToken];
 }
 
 
 
-const signup = async ({email, password, name}) => {
+const signup = async ({ email, password, name }) => {
     const userWithSameEmail = (await userService.getUserFormDb(
         null,
         `WHERE email='${email}'`)
@@ -97,16 +106,17 @@ const signup = async ({email, password, name}) => {
     console.log(`Verification Token For ${email} = ${verificationToken}`);
     const resultOfUserCreation = await userService.createUserDB(
         {
-            [user.columnName.email]:email,
+            [user.columnName.email]: email,
             [user.columnName.displayname]: name,
             [user.columnName.password]: password,
             [user.columnName.verification_token]: verificationToken,
+            [user.columnName.show_online]: true,
         }
     );
     const result = resultOfUserCreation.rows?.[0];
-    if ( !result ) {
+    if (!result) {
         throw new Error('User Cannot Be Created');
-    } 
+    }
     return result;
 }
 
@@ -118,24 +128,24 @@ const verifyAccount = async (token) => {
     return userData;
 }
 
-const authenticateSession = async function ( token ) {
+const authenticateSession = async function (token) {
     try {
         const userData = jwt.decode(token);
-        const {id: userId, sid} = userData
-        if ( ! sid )        throw new Error("Session id is null");
-        if ( ! userId )     throw new Error("User id is null");
+        const { id: userId, sid } = userData
+        if (!sid) throw new Error("Session id is null");
+        if (!userId) throw new Error("User id is null");
 
         const sessionKey = `${libs.constants.sessionPrefix}:${sid}`;
         const sessionStr = await services.redisService.sessionRedis('get', sessionKey);
-        if ( ! sessionStr )     return ;
+        if (!sessionStr) return;
 
         services.redisService.sessionRedis('expire', sessionKey, libs.constants.sessionExpireTime_Seconds);
         const sessionObj = JSON.parse(sessionStr);
-        if ( sessionObj && sessionObj.userId == userId )    return libs.utils.createSessionObj(sessionObj);
-        return ;
+        if (sessionObj && sessionObj.userId == userId) return libs.utils.createSessionObj(sessionObj);
+        return;
     } catch (error) {
         console.log("Error in authenticateSession. Error = ", error);
-        return ;
+        return;
     }
 }
 

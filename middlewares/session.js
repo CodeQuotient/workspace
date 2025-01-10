@@ -14,7 +14,9 @@ const checkLogin = (condition) => {
     return (req,  res, next) => {
         try {
             const isLoggedIn  = (req?.session?.userId)?true:false;
-            if ( isLoggedIn === condition ) return next();
+            if ( isLoggedIn === condition ) {
+                return next()
+            };
             if (!req?.session?.userId) {
                 throw new Error(libs.messages.errorMessage.sessionExpired);
             }
